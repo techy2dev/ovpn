@@ -2,9 +2,9 @@
 cp /usr/share/zoneinfo/Asia/Riyadh /etc/localtime
 #Database Details
 HOST='66.45.251.234';
-USER='upinthea_panel';
-PASS='yHt)=1!lMx9m';
-DBNAME='upinthea_panel';
+USER='dbuser';
+PASS='dbpass';
+DBNAME='dbuser';
 
 install_require()
 {
