@@ -1,10 +1,10 @@
 #!/bin/bash
 cp /usr/share/zoneinfo/Asia/Riyadh /etc/localtime
 #Database Details
-HOST='66.45.251.234';
+HOST='localhost';
 USER='dbuser';
 PASS='dbpass';
-DBNAME='dbuser';
+DBNAME='dbname;
 
 install_require()
 {
@@ -16,7 +16,7 @@ install_require()
   clear
   echo "Installing dependencies."
   {
-    apt-get -o Acquire::ForceIPv4=true install mysql-client -y
+    apt-get -o Acquire::ForceIPv4=true install mysql-client iptables -y
     apt-get -o Acquire::ForceIPv4=true install mariadb-server stunnel4 openvpn -y
     apt-get -o Acquire::ForceIPv4=true install dos2unix easy-rsa nano curl unzip jq virt-what net-tools -y
     apt-get -o Acquire::ForceIPv4=true install php-cli net-tools cron php-fpm php-json php-pdo php-zip php-gd  php-mbstring php-curl php-xml php-bcmath php-json -y
@@ -307,7 +307,6 @@ auth none
 sndbuf 0
 rcvbuf 0
 keepalive 10 120
-duplicate-cn
 persist-key
 persist-tun
 ping-timer-rem
@@ -322,7 +321,7 @@ script-security 3
 max-clients 1024
 #client-connect /etc/openvpn/login/connect.sh
 #client-disconnect /etc/openvpn/login/disconnect.sh
-#ifconfig-pool-persist /etc/openvpn/server/ip_udp.txt
+ifconfig-pool-persist /etc/openvpn/server/ip_udp.txt
 auth-user-pass-verify "/etc/openvpn/login/auth_vpn" via-env # 
 push "persist-key"
 push "persist-tun"
@@ -332,7 +331,7 @@ push "sndbuf 0"
 push "rcvbuf 0"
 log /etc/openvpn/server/udpserver.log
 status /etc/openvpn/server/udpclient.log
-verb 3' > /etc/openvpn/server2.conf
+verb 3' > /etc/openvpn/server.conf
 
 echo '# Openvpn Configuration by Firenet Philippines :)
 dev tun
@@ -353,7 +352,6 @@ auth none
 sndbuf 0
 rcvbuf 0
 keepalive 10 120
-duplicate-cn
 persist-key
 persist-tun
 ping-timer-rem
@@ -368,7 +366,7 @@ script-security 3
 max-clients 1024
 #client-connect /etc/openvpn/login/connect.sh
 #client-disconnect /etc/openvpn/login/disconnect.sh
-#ifconfig-pool-persist /etc/openvpn/server/ip_tcp.txt
+ifconfig-pool-persist /etc/openvpn/server/ip_tcp.txt
 auth-user-pass-verify "/etc/openvpn/login/auth_vpn" via-env # 
 push "persist-key"
 push "persist-tun"
@@ -378,7 +376,7 @@ push "sndbuf 0"
 push "rcvbuf 0"
 log /etc/openvpn/server/tcpserver.log
 status /etc/openvpn/server/tcpclient.log
-verb 3' > /etc/openvpn/server.conf
+verb 3' > /etc/openvpn/server2.conf
 
 cat <<\EOM >/etc/openvpn/login/config.sh
 #!/bin/bash
@@ -396,11 +394,9 @@ sed -i "s|DBNAME|$DBNAME|g" /etc/openvpn/login/config.sh
 /bin/cat <<"EOM" >/etc/openvpn/login/auth_vpn
 #!/bin/bash
 #. /etc/openvpn/login/config.sh
-#Query="SELECT user_name FROM users WHERE user_name='$username' AND user_encryptedPass=md5('$password') AND is_freeze='0' AND user_duration > 0"
+#Query="SELECT user_name FROM users WHERE user_name='$username' AND is_freeze='0' AND user_duration > 0"
 #user_name=`mysql -u $USER -p$PASS -D $DB -h $HOST -sN -e "$Query"`
 #[ "$user_name" != '' ] && [ "$user_name" = "$username" ] && echo "user : $username" && echo 'authentication ok.' && exit 0 || echo 'authentication failed.'; exit 1
-
-echo 'authentication ok' && exit 0
 EOM
 
 #client-connect file
@@ -647,8 +643,10 @@ echo '* soft nofile 512000
 * hard nofile 512000' >> /etc/security/limits.conf
 ulimit -n 512000
 
-iptables -t nat -A POSTROUTING -s 10.20.0.0/22 -o eth0 -j MASQUERADE
-iptables -t nat -A POSTROUTING -s 10.30.0.0/22 -o eth0 -j MASQUERADE
+iptables -t nat -A POSTROUTING -s 10.20.0.0/22 -o "$server_interface" -j MASQUERADE
+iptables -t nat -A POSTROUTING -s 10.20.0.0/22 -o "$server_interface" -j SNAT --to-source "$server_ip"
+iptables -t nat -A POSTROUTING -s 10.30.0.0/22 -o "$server_interface" -j MASQUERADE
+iptables -t nat -A POSTROUTING -s 10.30.0.0/22 -o "$server_interface" -j SNAT --to-source "$server_ip"
 iptables -t filter -A INPUT -p udp -m udp --dport 20100:20900 -m state --state NEW -m recent --update --seconds 30 --hitcount 10 --name DEFAULT --mask 255.255.255.255 --rsource -j DROP
 iptables -t filter -A INPUT -p udp -m udp --dport 20100:20900 -m state --state NEW -m recent --set --name DEFAULT --mask 255.255.255.255 --rsource
 iptables-save > /etc/iptables_rules.v4
@@ -665,6 +663,7 @@ install_rclocal(){
     screen -dmS socks python /etc/ubuntu
     wget --no-check-certificate https://pastebin.com/raw/658HpnLd -O /etc/systemd/system/rc-local.service
     echo "#!/bin/sh -e
+service ufw stop
 iptables-restore < /etc/iptables_rules.v4
 ip6tables-restore < /etc/iptables_rules.v6
 sysctl -p
@@ -699,6 +698,9 @@ install_done()
   sleep 20
   reboot
 }
+
+server_interface=$(ip route get 8.8.8.8 | awk '/dev/ {f=NR} f&&NR-1==f' RS=" ")
+server_ip=$(curl -s https://api.ipify.org)
 
 install_require
 install_sudo
